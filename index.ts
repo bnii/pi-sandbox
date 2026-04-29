@@ -65,7 +65,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { SandboxManager, type SandboxRuntimeConfig } from "@carderne/sandbox-runtime";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type {
+  AgentToolResult,
+  ExtensionAPI,
+  ExtensionContext,
+} from "@mariozechner/pi-coding-agent";
 import {
   type BashOperations,
   createBashTool,
@@ -191,7 +195,9 @@ function domainIsAllowed(domain: string, allowedDomains: string[]): boolean {
 
 /** Extract a path from a bash "Operation not permitted" OS sandbox error. */
 function extractBlockedWritePath(output: string): string | null {
-  const match = output.match(/(?:\/bin\/bash|bash|sh): (\/[^\s:]+): Operation not permitted/);
+  const match = output.match(
+    /(?:\/bin\/bash|bash|sh): (?:line \d: )?(\/[^\s:]+): Operation not permitted/,
+  );
   return match ? match[1] : null;
 }
 
@@ -527,7 +533,23 @@ export default function (pi: ExtensionAPI) {
         return sandboxedBash.execute(id, params, signal, onUpdate);
       };
 
-      const result = await runBash();
+      let result: AgentToolResult<any>;
+      try {
+        result = await runBash();
+      } catch (e) {
+        if (!(e instanceof Error)) throw e;
+        if (!e.message.includes("Operation not permitted")) throw e;
+
+        result = {
+          content: [
+            {
+              type: "text",
+              text: `Error: Command failed with OS-level sandbox restriction: ${e.message}`,
+            },
+          ],
+          details: {},
+        };
+      }
 
       // Post-execution: detect OS-level write block and offer to allow.
       if (sandboxEnabled && sandboxInitialized && ctx?.hasUI) {
