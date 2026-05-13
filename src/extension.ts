@@ -93,11 +93,15 @@ export default function (pi: ExtensionAPI) {
     await refreshSandbox(cwd);
   }
 
-  function updateStatus(
+  function updateEnabledStatus(
     ctx: Parameters<typeof warnIfAllDomainsAllowed>[0],
     config: ReturnType<typeof loadConfig>,
   ) {
     ctx.ui.setStatus("sandbox", ctx.ui.theme.fg("accent", formatSandboxStatus(config)));
+  }
+
+  function updateDisabledStatus(ctx: Parameters<typeof warnIfAllDomainsAllowed>[0]): void {
+    ctx.ui.setStatus("sandbox", ctx.ui.theme.fg("error", "🔓 Sandbox: disabled"));
   }
 
   async function enableSandbox(
@@ -112,6 +116,7 @@ export default function (pi: ExtensionAPI) {
     const config = loadConfig(ctx.cwd);
     const platform = process.platform;
     if (platform !== "darwin" && platform !== "linux") {
+      updateDisabledStatus(ctx);
       ctx.ui.notify(`Sandbox not supported on ${platform}`, "warning");
       return false;
     }
@@ -124,10 +129,12 @@ export default function (pi: ExtensionAPI) {
       sandboxEnabled = true;
       sandboxInitialized = true;
       warnIfAllDomainsAllowed(ctx, config);
-      updateStatus(ctx, config);
+      updateEnabledStatus(ctx, config);
       return true;
     } catch (error) {
       sandboxEnabled = false;
+      sandboxInitialized = false;
+      updateDisabledStatus(ctx);
       ctx.ui.notify(
         `Sandbox initialization failed: ${error instanceof Error ? error.message : error}`,
         "error",
@@ -153,7 +160,7 @@ export default function (pi: ExtensionAPI) {
     }
     sandboxEnabled = false;
     sandboxInitialized = false;
-    ctx.ui.setStatus("sandbox", "");
+    updateDisabledStatus(ctx);
     return true;
   }
 
@@ -349,11 +356,15 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     if (pi.getFlag("no-sandbox") as boolean) {
       sandboxEnabled = false;
+      sandboxInitialized = false;
+      updateDisabledStatus(ctx);
       ctx.ui.notify("Sandbox disabled via --no-sandbox", "warning");
       return;
     }
     if (!loadConfig(ctx.cwd).enabled) {
       sandboxEnabled = false;
+      sandboxInitialized = false;
+      updateDisabledStatus(ctx);
       ctx.ui.notify("Sandbox disabled via config", "info");
       return;
     }
