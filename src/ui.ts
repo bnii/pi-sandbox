@@ -16,6 +16,29 @@ export interface PermissionPromptResult {
   value: string;
 }
 
+export interface SandboxStatus {
+  enabled: boolean;
+  initialized: boolean;
+  projectConfigPath: string;
+  globalConfigPath: string;
+  network: {
+    allowedDomains: string[];
+    deniedDomains: string[];
+    sessionAllowedDomains: string[];
+    effectiveAllowedDomains: string[];
+  };
+  filesystem: {
+    denyRead: string[];
+    allowRead: string[];
+    effectiveAllowRead: string[];
+    allowWrite: string[];
+    effectiveAllowWrite: string[];
+    denyWrite: string[];
+    sessionAllowedReadPaths: string[];
+    sessionAllowedWritePaths: string[];
+  };
+}
+
 interface PromptOption {
   label: string;
   key: string;
@@ -360,6 +383,49 @@ export function formatSandboxStatus(config: SandboxConfig): string {
     ? "all domains"
     : `${config.network?.allowedDomains?.length ?? 0} domains`;
   return `🔒 Sandbox: ${networkLabel}, ${config.filesystem?.allowWrite?.length ?? 0} write paths`;
+}
+
+export function formatSandboxStatusReport(status: SandboxStatus): string {
+  return [
+    "Sandbox Configuration",
+    `  Status: ${status.enabled ? "enabled" : "disabled"}`,
+    `  Initialized: ${status.initialized ? "yes" : "no"}`,
+    `  Project config: ${status.projectConfigPath}`,
+    `  Global config:  ${status.globalConfigPath}`,
+    "",
+    "Network (bash + !cmd):",
+    `  Allowed domains:  ${status.network.allowedDomains.join(", ") || "(none)"}`,
+    ...(allowsAllDomains(status.network.allowedDomains)
+      ? ['  ⚠️ "*" allows all domains and disables per-domain prompts.']
+      : []),
+    `  Denied domains:   ${status.network.deniedDomains.join(", ") || "(none)"}`,
+    `  Effective allow:  ${status.network.effectiveAllowedDomains.join(", ") || "(none)"}`,
+    ...(status.network.sessionAllowedDomains.length
+      ? [`  Session allowed: ${status.network.sessionAllowedDomains.join(", ")}`]
+      : []),
+    "",
+    "Filesystem (bash + read/write/edit tools):",
+    `  Deny Read:        ${status.filesystem.denyRead.join(", ") || "(none)"}`,
+    `  Allow Read:       ${status.filesystem.allowRead.join(", ") || "(none)"}`,
+    `  Effective Read:   ${status.filesystem.effectiveAllowRead.join(", ") || "(none)"}`,
+    `  Allow Write:      ${status.filesystem.allowWrite.join(", ") || "(none)"}`,
+    `  Effective Write:  ${status.filesystem.effectiveAllowWrite.join(", ") || "(none)"}`,
+    `  Deny Write:       ${status.filesystem.denyWrite.join(", ") || "(none)"}`,
+    ...(status.filesystem.sessionAllowedReadPaths.length
+      ? [`  Session read:     ${status.filesystem.sessionAllowedReadPaths.join(", ")}`]
+      : []),
+    ...(status.filesystem.sessionAllowedWritePaths.length
+      ? [`  Session write:    ${status.filesystem.sessionAllowedWritePaths.join(", ")}`]
+      : []),
+    "",
+    "Notes:",
+    "  - bash commands run in an OS-level sandbox.",
+    "  - read/write/edit tool calls are checked before execution.",
+    "  - allowWrite also grants read access to the same path.",
+    "  - denyRead can be overridden by a granted read prompt.",
+    "  - denyWrite takes precedence over allowWrite and is never prompted.",
+    "  - Session allowances are temporary, in-memory additions to the configured policy.",
+  ].join("\n");
 }
 
 export function formatSandboxConfiguration(

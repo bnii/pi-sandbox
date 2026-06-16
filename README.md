@@ -134,14 +134,20 @@ or set it to `0` to wait indefinitely. A timeout never grants permission.
 - Allow for this project — written to `.pi/sandbox.json`
 - Allow for all projects — written to Pi's global agent directory (by default, `~/.pi/agent/sandbox.json`; respects `PI_CODING_AGENT_DIR`)
 
-**Session allowances** are held in memory only. They are never written to disk
-and the agent has no way to read or modify them. They are reset when the
-extension reloads or pi restarts. Parent agents and subagents have separate
-sandbox managers and session allowances; shutting down one does not affect another.
+The read-only **`sandbox_status` agent tool** reports whether the sandbox is
+active and shows the configured, session-only, and effective network and
+filesystem policies. This lets the agent distinguish a sandbox denial from a
+missing or broken resource.
+
+**Session allowances** are held in memory only and are never written to disk.
+The agent can inspect them through `sandbox_status`, but cannot add an allowance
+without user approval. They are reset when the extension reloads or pi restarts.
+Parent agents and subagents have separate sandbox managers and session
+allowances; shutting down one does not affect another.
 
 Saved project or global permission changes are not broadcast to other running
-sessions' sandbox managers. Restart affected sessions to apply grants or revocations
-consistently.
+sessions' sandbox managers. Restart affected sessions to apply grants or
+revocations consistently.
 
 ### What is prompted vs. hard-blocked
 

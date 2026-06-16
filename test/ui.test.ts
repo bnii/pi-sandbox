@@ -4,6 +4,7 @@ import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-cod
 import assert from "node:assert/strict";
 
 import {
+  formatSandboxStatusReport,
   permissionOptions,
   permissionPromptRemainingSeconds,
   permissionPromptTimeoutMs,
@@ -40,6 +41,36 @@ test("permissionPromptRemainingSeconds rounds up and stops at zero", () => {
   assert.equal(permissionPromptRemainingSeconds(deadlineMs, 9_999), 1);
   assert.equal(permissionPromptRemainingSeconds(deadlineMs, 10_000), 0);
   assert.equal(permissionPromptRemainingSeconds(deadlineMs, 11_000), 0);
+});
+
+test("formatSandboxStatusReport includes runtime state and effective allowances", () => {
+  const report = formatSandboxStatusReport({
+    enabled: false,
+    initialized: false,
+    projectConfigPath: "/workspace/.pi/sandbox.json",
+    globalConfigPath: "/home/test/.pi/agent/sandbox.json",
+    network: {
+      allowedDomains: ["example.com"],
+      deniedDomains: ["blocked.example"],
+      sessionAllowedDomains: ["session.example"],
+      effectiveAllowedDomains: ["example.com", "session.example"],
+    },
+    filesystem: {
+      denyRead: ["/home"],
+      allowRead: ["/workspace"],
+      effectiveAllowRead: ["/workspace", "/tmp/output"],
+      allowWrite: ["/tmp"],
+      effectiveAllowWrite: ["/tmp", "/tmp/output"],
+      denyWrite: ["*.key"],
+      sessionAllowedReadPaths: [],
+      sessionAllowedWritePaths: ["/tmp/output"],
+    },
+  });
+
+  assert.match(report, /Status: disabled/);
+  assert.match(report, /Effective allow:  example\.com, session\.example/);
+  assert.match(report, /Effective Read:   \/workspace, \/tmp\/output/);
+  assert.match(report, /Session write:    \/tmp\/output/);
 });
 
 test(

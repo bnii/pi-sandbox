@@ -6,6 +6,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
+import { Type } from "typebox";
 
 import {
   addDomainToConfig,
@@ -33,7 +34,9 @@ import {
 import {
   formatSandboxConfiguration,
   formatSandboxStatus,
+  formatSandboxStatusReport,
   type PermissionPromptResult,
+  type SandboxStatus,
   promptDomainBlock,
   promptReadBlock,
   showPermissionPrompt,
@@ -61,6 +64,35 @@ export default function (pi: ExtensionAPI) {
   const effectiveDomains = (cwd: string) => effectiveAllowances(cwd).domains;
   const effectiveReadPaths = (cwd: string) => effectiveAllowances(cwd).readPaths;
   const effectiveWritePaths = (cwd: string) => effectiveAllowances(cwd).writePaths;
+
+  function getSandboxStatus(cwd: string): SandboxStatus {
+    const config = loadConfig(cwd);
+    const { globalPath, projectPath } = getConfigPaths(cwd);
+    const effective = resolveAllowances(config, allowances);
+
+    return {
+      enabled: sandboxEnabled,
+      initialized: sandboxInitialized,
+      projectConfigPath: projectPath,
+      globalConfigPath: globalPath,
+      network: {
+        allowedDomains: [...(config.network?.allowedDomains ?? [])],
+        deniedDomains: [...(config.network?.deniedDomains ?? [])],
+        sessionAllowedDomains: [...allowances.domains],
+        effectiveAllowedDomains: [...effective.domains],
+      },
+      filesystem: {
+        denyRead: [...(config.filesystem?.denyRead ?? [])],
+        allowRead: [...(config.filesystem?.allowRead ?? [])],
+        effectiveAllowRead: [...effective.readPaths],
+        allowWrite: [...(config.filesystem?.allowWrite ?? [])],
+        effectiveAllowWrite: [...effective.writePaths],
+        denyWrite: [...(config.filesystem?.denyWrite ?? [])],
+        sessionAllowedReadPaths: [...allowances.readPaths],
+        sessionAllowedWritePaths: [...allowances.writePaths],
+      },
+    };
+  }
 
   async function refreshSandbox(cwd: string): Promise<void> {
     if (!sandboxInitialized) return;
@@ -171,6 +203,25 @@ export default function (pi: ExtensionAPI) {
     }
     if (await enableSandbox(ctx, false)) ctx.ui.notify("Sandbox enabled", "info");
   }
+
+  pi.registerTool({
+    name: "sandbox_status",
+    label: "Sandbox status",
+    description: "Return the current pi-sandbox state and effective filesystem and network policy.",
+    promptSnippet:
+      "Inspect current pi-sandbox constraints, including allowed domains, read/write paths, and session allowances",
+    promptGuidelines: [
+      "Use sandbox_status when an operation may have failed because pi-sandbox blocked filesystem or network access.",
+    ],
+    parameters: Type.Object({}),
+    async execute(_id, _params, _signal, _onUpdate, ctx) {
+      const status = getSandboxStatus(ctx.cwd);
+      return {
+        content: [{ type: "text", text: formatSandboxStatusReport(status) }],
+        details: status,
+      };
+    },
+  });
 
   pi.registerTool({
     ...localBash,
